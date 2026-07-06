@@ -113,12 +113,35 @@
               <option value="column">Colonne de la table</option>
               <option value="separator">Séparateur</option>
               <option value="text">Texte libre</option>
+              <option value="gristFunction">Fonction Grist</option>
             </select>
             <select v-if="newElementType === 'column'" v-model="selectedColumn" class="element-input">
               <option value="">-- Sélectionner une colonne --</option>
               <option v-for="col in availableColumns" :key="col" :value="col">{{ col }}</option>
             </select>
             <textarea v-if="newElementType === 'text'" v-model="newElementContent" class="element-input" rows="3" placeholder="Texte"></textarea>
+            <div v-if="newElementType === 'gristFunction'" class="grist-function-config">
+              <label>Nom de la fonction</label>
+              <input v-model="newElementFunctionName" placeholder="Ex: Mettre à jour le stock" class="element-input">
+
+              <label>Actions Grist (JSON)</label>
+              <textarea
+                v-model="newElementActions"
+                placeholder='[
+                  {
+                    "action": "UpdateRecord",
+                    "tableId": "Stock",
+                    "recordId": 1,
+                    "fields": { "quantite": "$quantite_commandee" }
+                  }
+                ]'
+                class="element-input"
+                rows="5"
+              ></textarea>
+
+              <label>Description (optionnelle)</label>
+              <textarea v-model="newElementDescription" placeholder="Description de la fonction" class="element-input" rows="2"></textarea>
+            </div>
           </div>
           <button class="add-element-btn" @click="addElement">Ajouter</button>
         </div>
