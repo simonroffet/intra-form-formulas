@@ -1105,6 +1105,38 @@ const app = createApp({
         .map(entry => entry.opt);
     }
 
+    // Build the option label as HTML with the characters matching the query
+    // highlighted (greedy left-to-right subsequence). Only options that actually
+    // fuzzy-match get highlights. Every character is HTML-escaped, and only
+    // trusted <span> tags are injected, so the label stays XSS-safe.
+    function highlightRefLabel(element, opt) {
+      const label = String(opt.label);
+      const escapeHtml = str =>
+        str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      const raw = (refSearch[element.fieldName]?.query || '').trim();
+      if (!raw || fuzzyScore(raw, label) === null) return escapeHtml(label);
+
+      const q = normalizeText(raw);
+      let html = '';
+      let qi = 0;
+      let open = false;
+      for (const ch of label) {
+        const matched = qi < q.length && normalizeText(ch) === q[qi];
+        if (matched) qi++;
+        if (matched && !open) {
+          html += '<span class="ref-match">';
+          open = true;
+        } else if (!matched && open) {
+          html += '</span>';
+          open = false;
+        }
+        html += escapeHtml(ch);
+      }
+      if (open) html += '</span>';
+      return html;
+    }
+
     // Open the dropdown and start from an empty query so all options show
     function openRefSearch(element) {
       const state = refState(element.fieldName);
@@ -1452,6 +1484,7 @@ const app = createApp({
       onRefSearchInput,
       closeRefSearch,
       refInputValue,
+      highlightRefLabel,
       isRefOptionSelected,
       selectRefOption,
       clearRefOption,

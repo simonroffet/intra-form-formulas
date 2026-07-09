@@ -464,6 +464,11 @@ select[multiple] option:checked {
   color: #2383e2;
 }
 
+.ref-match {
+  color: #2383e2;
+  font-weight: 600;
+}
+
 .ref-option-clear {
   color: #888;
 }

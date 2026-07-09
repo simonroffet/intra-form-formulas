@@ -203,7 +203,7 @@
                   class="ref-option"
                   :class="{ selected: isRefSelected(element, opt) }"
                   @mousedown.prevent="toggleRefOption(element, opt)"
-                ><span class="ref-check">{{ isRefSelected(element, opt) ? '✓' : '' }}</span>{{ opt.label }}</li>
+                ><span class="ref-check">{{ isRefSelected(element, opt) ? '✓' : '' }}</span><span v-html="highlightRefLabel(element, opt)"></span></li>
                 <li v-if="!filteredRefOptions(element).length" class="ref-option ref-empty">Aucun résultat</li>
               </ul>
             </div>
@@ -242,7 +242,8 @@
                   class="ref-option"
                   :class="{ selected: isRefOptionSelected(element, opt) }"
                   @mousedown.prevent="selectRefOption(element, opt)"
-                >{{ opt.label }}</li>
+                  v-html="highlightRefLabel(element, opt)"
+                ></li>
                 <li v-if="!filteredRefOptions(element).length" class="ref-option ref-empty">Aucun résultat</li>
               </ul>
             </div>
