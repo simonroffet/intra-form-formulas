@@ -127,7 +127,7 @@
 
     <!-- Formulaire principal -->
     <div class="container" :style="containerStyle">
-      <template v-for="element in formElements" :key="element.fieldName || element.content">
+      <template v-for="(element, index) in formElements" :key="index">
         <!-- Séparateur -->
         <div v-if="element.type === 'separator'" class="separator"></div>
         <!-- Texte -->

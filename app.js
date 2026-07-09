@@ -4,7 +4,7 @@
 // conditional fields, rich text editing, and field validation.
 // =============================================================================
 
-const { createApp, ref, computed, reactive, onMounted, toRaw } = Vue;
+const { createApp, ref, computed, reactive, onMounted, toRaw, watch } = Vue;
 
 // DOMPurify configuration for XSS protection (shared across all sanitization calls)
 const sanitizeConfig = {
@@ -241,6 +241,15 @@ const app = createApp({
       });
     });
 
+    // Same list, but excluding the field currently being edited so it can't
+    // be made conditional on itself (which would be a circular rule).
+    const availableConditionFields = computed(() => {
+      const currentField = filterPopup.index !== null
+        ? formElements.value[filterPopup.index]?.fieldName
+        : null;
+      return eligibleFieldsForConditions.value.filter(f => f.fieldName !== currentField);
+    });
+
     // -------------------------------------------------------------------------
     // GRIST INITIALIZATION
     // -------------------------------------------------------------------------
@@ -260,6 +269,37 @@ const app = createApp({
         });
       });
     });
+
+    // Whenever a value or the configuration changes, reset any field that is
+    // currently hidden by a condition back to its default. This prevents stale
+    // values from resurfacing when a field is hidden then shown again, and lets
+    // chained conditions re-evaluate against a clean state. Writes are guarded
+    // to stay idempotent so the deep watcher converges without looping.
+    watch(
+      [formData, formElements],
+      () => {
+        formElements.value.forEach(el => {
+          if (el.type !== 'field' || !el.conditional) return;
+          if (shouldShowField(el)) return;
+
+          const col = el.fieldName;
+          const meta = columnMetadata.value[col];
+
+          if (meta?.isAttachment) {
+            if ((pendingAttachments[col] || []).length) pendingAttachments[col] = [];
+            return;
+          }
+
+          const def = defaultValue(meta);
+          if (meta?.isMultiple) {
+            if (Array.isArray(formData[col]) && formData[col].length) formData[col] = def;
+          } else if (formData[col] !== def) {
+            formData[col] = def;
+          }
+        });
+      },
+      { deep: true }
+    );
 
     // -------------------------------------------------------------------------
     // COLUMN & METADATA FETCHING
@@ -543,7 +583,31 @@ const app = createApp({
     // Remove element from form configuration
     // Column becomes available again after removal
     async function removeElement(index) {
+      const removed = formElements.value[index];
       formElements.value.splice(index, 1);
+
+      // When removing a field, avoid leaving dangling state behind
+      if (removed?.type === 'field') {
+        const removedCol = removed.fieldName;
+
+        // Drop its form data only if no other field still uses this column
+        const stillUsed = formElements.value.some(
+          el => el.type === 'field' && el.fieldName === removedCol
+        );
+        if (!stillUsed) {
+          delete formData[removedCol];
+          delete pendingAttachments[removedCol];
+        }
+
+        // Clear conditional rules that referenced the removed field,
+        // otherwise dependent fields would evaluate against a stale value
+        formElements.value.forEach(el => {
+          if (el.type === 'field' && el.conditional?.field === removedCol) {
+            el.conditional = null;
+          }
+        });
+      }
+
       await saveConfiguration();
     }
 
@@ -1036,6 +1100,21 @@ const app = createApp({
       // Clear previous error state
       delete errors[col];
 
+      // The column may have been deleted from the table since this form was configured
+      if (!meta) {
+        errors[col] = "Cette colonne n'existe plus dans la table";
+        return false;
+      }
+
+      // Attachments live in pendingAttachments, not formData: only a required-check applies
+      if (meta.isAttachment) {
+        if (element.required && (pendingAttachments[col] || []).length === 0) {
+          errors[col] = 'Ce champ est requis';
+          return false;
+        }
+        return true;
+      }
+
       // Required field validation
       if (element.required) {
         if (meta?.isBool && !value) {
@@ -1130,8 +1209,17 @@ const app = createApp({
         // Numeric: parse float, accepting comma as decimal separator
         } else if (meta?.isNumeric || meta?.isInt) {
           fields[col] = value ? parseFloat(value.toString().replace(',', '.')) : null;
-        // Date/DateTime: convert to timestamp in seconds
-        } else if (meta?.isDate || meta?.isDateTime) {
+        // Date: store as UTC midnight of the picked calendar day (Grist convention),
+        // building it from the y/m/d parts so it doesn't shift with the browser timezone
+        } else if (meta?.isDate) {
+          if (value) {
+            const [y, m, d] = value.split('-').map(Number);
+            fields[col] = Math.floor(Date.UTC(y, m - 1, d) / 1000);
+          } else {
+            fields[col] = null;
+          }
+        // DateTime: the picked value is a local wall-clock time; convert that instant to epoch seconds
+        } else if (meta?.isDateTime) {
           fields[col] = value ? Math.floor(new Date(value).getTime() / 1000) : null;
         // Default (text): return sanitized string
         } else {
@@ -1216,7 +1304,7 @@ const app = createApp({
       // Computed
       containerStyle,
       availableColumns,
-      conditionalFields: eligibleFieldsForConditions,
+      conditionalFields: availableConditionFields,
 
       // Methods
       formatFileSize,
