@@ -1035,12 +1035,74 @@ const app = createApp({
       return refSearch[col];
     }
 
-    // Options of a Ref/RefList field filtered by the current search query
+    // Normalize a string for search: lowercase + strip diacritics (é -> e),
+    // so a query without accents still matches accented labels.
+    function normalizeText(s) {
+      return String(s)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+    }
+
+    // Levenshtein edit distance between two strings (iterative, two rolling rows)
+    function levenshtein(a, b) {
+      if (a === b) return 0;
+      if (!a.length) return b.length;
+      if (!b.length) return a.length;
+      let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+      let curr = new Array(b.length + 1);
+      for (let i = 1; i <= a.length; i++) {
+        curr[0] = i;
+        for (let j = 1; j <= b.length; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+        }
+        [prev, curr] = [curr, prev];
+      }
+      return prev[b.length];
+    }
+
+    // Fuzzy match score of a query against a label (lower = better, null = no match).
+    // Tiers: exact substring first (prefix ranks highest), then a typo-tolerant
+    // fallback using bounded Levenshtein over a sliding window and each word.
+    function fuzzyScore(query, label) {
+      const q = normalizeText(query);
+      const t = normalizeText(label);
+      if (!q) return 0;
+
+      const idx = t.indexOf(q);
+      if (idx !== -1) return idx;            // substring: prefix (idx 0) first
+
+      // Allow roughly one typo every three characters (at least one)
+      const maxErrors = Math.max(1, Math.floor(q.length / 3));
+      let best = Infinity;
+
+      // Slide a window of about the query length across the label
+      for (let i = 0; i + q.length - 1 < t.length; i++) {
+        best = Math.min(best, levenshtein(q, t.substr(i, q.length)));
+        best = Math.min(best, levenshtein(q, t.substr(i, q.length + 1)));
+        if (best === 0) break;
+      }
+      // Also compare against individual words (handles short labels / word typos)
+      for (const word of t.split(/\s+/)) {
+        best = Math.min(best, levenshtein(q, word));
+      }
+
+      // Offset keeps fuzzy matches ranked after any substring match
+      return best <= maxErrors ? 1000 + best : null;
+    }
+
+    // Options of a Ref/RefList field: all options stay available, only reordered
+    // by resemblance to the current query (best match first, non-matches last).
+    // Array.sort is stable, so ties and non-matches keep their original order.
     function filteredRefOptions(element) {
       const opts = getSelectOptions(element);
-      const q = (refSearch[element.fieldName]?.query || '').trim().toLowerCase();
+      const q = (refSearch[element.fieldName]?.query || '').trim();
       if (!q) return opts;
-      return opts.filter(opt => String(opt.label).toLowerCase().includes(q));
+      return opts
+        .map(opt => ({ opt, score: fuzzyScore(q, opt.label) }))
+        .sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity))
+        .map(entry => entry.opt);
     }
 
     // Open the dropdown and start from an empty query so all options show
