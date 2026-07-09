@@ -130,6 +130,7 @@ const app = createApp({
                                           // overlay is visible
     const globalFont = ref('');           // Selected font family
     const globalPadding = ref('');        // Selected padding size
+    const postSubmitScript = ref('');     // JS run after the main record is created
 
     // Messages
     const formErrorMessage = ref('');     // Global form error message
@@ -462,6 +463,7 @@ const app = createApp({
       // Load global style settings
       globalFont.value = options.globalFont || '';
       globalPadding.value = options.globalPadding || '';
+      postSubmitScript.value = options.postSubmitScript || '';
 
       // Initialize formData with default values for each field
       formElements.value.forEach(el => {
@@ -491,7 +493,8 @@ const app = createApp({
         initialized: true,
         formElements: toRaw(formElements.value),
         globalFont: globalFont.value,
-        globalPadding: globalPadding.value
+        globalPadding: globalPadding.value,
+        postSubmitScript: postSubmitScript.value
       });
     }
 
@@ -1076,6 +1079,56 @@ const app = createApp({
     }
 
     // -------------------------------------------------------------------------
+    // POST-SUBMIT SCRIPT (sandboxed JS, runs after main record creation)
+    // -------------------------------------------------------------------------
+
+    const POST_SUBMIT_SCRIPT_TIMEOUT_MS = 10000;
+
+    // Reject obvious attempts to reach globals outside the sandbox API
+    function assertPostSubmitScriptSafe(script) {
+      const forbidden = /\b(import\s*\(|fetch\s*\(|XMLHttpRequest|document\.|window\.|eval\s*\(|Function\s*\()/i;
+      if (forbidden.test(script)) {
+        throw new Error('Mot-clé non autorisé dans le script');
+      }
+    }
+
+    // Build a minimal API exposed to the post-submit script
+    function buildPostSubmitApi(recordId, fields, values) {
+      return {
+        recordId,
+        fields,
+        values,
+        async createRecord(tableId, recordFields) {
+          const table = grist.getTable(tableId);
+          const result = await table.create({ fields: recordFields });
+          return result.id;
+        }
+      };
+    }
+
+    // Run the configured script in a strict async sandbox (api-only parameter)
+    async function runPostSubmitScript(script, api) {
+      if (!script?.trim()) return;
+
+      assertPostSubmitScriptSafe(script);
+
+      const fn = new Function(
+        'api',
+        '"use strict";\nreturn (async function() {\n' + script + '\n})();'
+      );
+
+      await Promise.race([
+        fn(api),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Script timeout (' + POST_SUBMIT_SCRIPT_TIMEOUT_MS / 1000 + 's)')),
+            POST_SUBMIT_SCRIPT_TIMEOUT_MS
+          )
+        )
+      ]);
+    }
+
+    // -------------------------------------------------------------------------
     // FORM SUBMISSION
     // -------------------------------------------------------------------------
 
@@ -1155,7 +1208,21 @@ const app = createApp({
         }
 
         // Create new record
-        await grist.selectedTable.create({ fields });
+        const created = await grist.selectedTable.create({ fields });
+        const recordId = created.id;
+
+        // Run optional post-submit script (e.g. create a row in another table)
+        if (postSubmitScript.value.trim()) {
+          const values = JSON.parse(JSON.stringify(toRaw(formData)));
+          const api = buildPostSubmitApi(recordId, { ...fields }, values);
+          try {
+            await runPostSubmitScript(postSubmitScript.value, api);
+          } catch (scriptError) {
+            console.error('Post-submit script error:', scriptError);
+            formErrorMessage.value =
+              'Réponse enregistrée, mais erreur dans le script post-soumission : ' + scriptError.message;
+          }
+        }
 
         // Show success message
         formSuccessMessage.value = 'Votre réponse a bien été enregistrée';
@@ -1196,6 +1263,7 @@ const app = createApp({
       showOverlay,
       globalFont,
       globalPadding,
+      postSubmitScript,
       formErrorMessage,
       formSuccessMessage,
       newElementType,

@@ -55,6 +55,21 @@
           </div>
         </div>
 
+        <!-- Script post-soumission -->
+        <div class="post-submit-settings">
+          <label for="postSubmitScript">Script après enregistrement (JavaScript)</label>
+          <p class="setting-hint">Exécuté après la création de l'enregistrement. Variable disponible : <code>api</code> (<code>api.recordId</code>, <code>api.fields</code>, <code>api.values</code>, <code>api.createRecord(tableId, fields)</code>).</p>
+          <textarea
+            id="postSubmitScript"
+            v-model="postSubmitScript"
+            @change="saveConfiguration"
+            class="post-submit-script"
+            rows="8"
+            placeholder="// Exemple : créer une ligne dans une autre table&#10;await api.createRecord('AutreTable', {&#10;  Nom: api.values.Nom,&#10;  Source: api.recordId&#10;});"
+            spellcheck="false"
+          ></textarea>
+        </div>
+
         <!-- Liste des elements du formulaire -->
         <div class="modal-body">
           <div

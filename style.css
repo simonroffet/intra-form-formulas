@@ -119,6 +119,54 @@ body {
   cursor: pointer;
 }
 
+.post-submit-settings {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+.post-submit-settings > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #37352f;
+  margin-bottom: 6px;
+}
+
+.setting-hint {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.setting-hint code {
+  font-size: 11px;
+  background: #eee;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.post-submit-script {
+  width: 100%;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #fff;
+  color: #37352f;
+  resize: vertical;
+  min-height: 140px;
+}
+
+.post-submit-script:focus {
+  outline: none;
+  border-color: #2383e2;
+}
+
 /* -----------------------------------------------------------------------------
    Liste des elements (modal)
    ----------------------------------------------------------------------------- */
