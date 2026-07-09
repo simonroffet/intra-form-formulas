@@ -175,6 +175,38 @@
               type="date"
               v-model="formData[element.fieldName]"
             >
+            <!-- RefList : combobox multi avec recherche -->
+            <div
+              v-else-if="columnMetadata[element.fieldName]?.isRef && columnMetadata[element.fieldName]?.isMultiple && getSelectOptions(element).length"
+              class="ref-combobox ref-combobox-multi"
+            >
+              <div class="ref-chips">
+                <span v-for="opt in selectedRefOptions(element)" :key="opt.id" class="ref-chip">
+                  {{ opt.label }}
+                  <button type="button" class="ref-chip-remove" @mousedown.prevent="removeRefChip(element, opt)">×</button>
+                </span>
+                <input
+                  type="text"
+                  class="ref-combobox-input"
+                  :value="refQuery(element)"
+                  @focus="openRefSearch(element)"
+                  @input="onRefSearchInput(element, $event)"
+                  @blur="closeRefSearch(element)"
+                  placeholder="Rechercher…"
+                  autocomplete="off"
+                >
+              </div>
+              <ul v-if="refIsOpen(element)" class="ref-options">
+                <li
+                  v-for="opt in filteredRefOptions(element)"
+                  :key="opt.id"
+                  class="ref-option"
+                  :class="{ selected: isRefSelected(element, opt) }"
+                  @mousedown.prevent="toggleRefOption(element, opt)"
+                ><span class="ref-check">{{ isRefSelected(element, opt) ? '✓' : '' }}</span>{{ opt.label }}</li>
+                <li v-if="!filteredRefOptions(element).length" class="ref-option ref-empty">Aucun résultat</li>
+              </ul>
+            </div>
             <!-- Select multiple (ChoiceList, RefList) -->
             <select
               v-else-if="columnMetadata[element.fieldName]?.isMultiple"
@@ -187,6 +219,33 @@
                 :value="opt.id"
               >{{ opt.label }}</option>
             </select>
+            <!-- Ref simple : combobox avec recherche -->
+            <div
+              v-else-if="columnMetadata[element.fieldName]?.isRef && getSelectOptions(element).length"
+              class="ref-combobox"
+            >
+              <input
+                type="text"
+                class="ref-combobox-input"
+                :value="refInputValue(element)"
+                @focus="openRefSearch(element)"
+                @input="onRefSearchInput(element, $event)"
+                @blur="closeRefSearch(element)"
+                placeholder="Rechercher…"
+                autocomplete="off"
+              >
+              <ul v-if="refIsOpen(element)" class="ref-options">
+                <li class="ref-option ref-option-clear" @mousedown.prevent="clearRefOption(element)">-- Aucun --</li>
+                <li
+                  v-for="opt in filteredRefOptions(element)"
+                  :key="opt.id"
+                  class="ref-option"
+                  :class="{ selected: isRefOptionSelected(element, opt) }"
+                  @mousedown.prevent="selectRefOption(element, opt)"
+                >{{ opt.label }}</li>
+                <li v-if="!filteredRefOptions(element).length" class="ref-option ref-empty">Aucun résultat</li>
+              </ul>
+            </div>
             <!-- Select simple (Choice, Ref) -->
             <select
               v-else-if="hasSelectOptions(element)"

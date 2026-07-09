@@ -371,6 +371,117 @@ select[multiple] option:checked {
 }
 
 /* -----------------------------------------------------------------------------
+   Combobox de recherche (champs Ref / RefList)
+   ----------------------------------------------------------------------------- */
+
+.ref-combobox {
+  position: relative;
+}
+
+.ref-combobox-multi .ref-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #fff;
+  transition: border-color 0.2s;
+}
+
+.ref-combobox-multi .ref-chips:focus-within {
+  border-color: #2383e2;
+}
+
+.ref-combobox-multi .ref-combobox-input {
+  flex: 1;
+  min-width: 120px;
+  width: auto;
+  border: none;
+  padding: 4px;
+}
+
+.ref-combobox-multi .ref-combobox-input:focus {
+  outline: none;
+}
+
+.ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #eef3fb;
+  color: #2383e2;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.ref-chip-remove {
+  width: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2383e2;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.ref-options {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ref-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #37352f;
+}
+
+.ref-option:hover {
+  background: #f2f5f9;
+}
+
+.ref-option.selected {
+  background: #eef3fb;
+  color: #2383e2;
+}
+
+.ref-option-clear {
+  color: #888;
+}
+
+.ref-empty,
+.ref-empty:hover {
+  color: #888;
+  cursor: default;
+  background: none;
+}
+
+.ref-check {
+  width: 14px;
+  display: inline-block;
+  color: #2383e2;
+}
+
+/* -----------------------------------------------------------------------------
    Messages et erreurs
    ----------------------------------------------------------------------------- */
 

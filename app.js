@@ -38,6 +38,7 @@ const app = createApp({
     const formData = reactive({});        // Current form values
     const errors = reactive({});          // Validation errors per field
     const pendingAttachments = reactive({}); // Temporary storage for file uploads per column
+    const refSearch = reactive({});       // Per-field combobox UI state for Ref/RefList search
 
     // -------------------------------------------------------------------------
     // ATTACHMENT HANDLING
@@ -1023,6 +1024,126 @@ const app = createApp({
     }
 
     // -------------------------------------------------------------------------
+    // REFERENCE SEARCH (searchable combobox for Ref / RefList fields)
+    // -------------------------------------------------------------------------
+
+    // Lazily create and return the per-field combobox UI state
+    function refState(col) {
+      if (!refSearch[col]) {
+        refSearch[col] = { open: false, query: '' };
+      }
+      return refSearch[col];
+    }
+
+    // Options of a Ref/RefList field filtered by the current search query
+    function filteredRefOptions(element) {
+      const opts = getSelectOptions(element);
+      const q = (refSearch[element.fieldName]?.query || '').trim().toLowerCase();
+      if (!q) return opts;
+      return opts.filter(opt => String(opt.label).toLowerCase().includes(q));
+    }
+
+    // Open the dropdown and start from an empty query so all options show
+    function openRefSearch(element) {
+      const state = refState(element.fieldName);
+      state.query = '';
+      state.open = true;
+    }
+
+    // Update the query as the user types
+    function onRefSearchInput(element, event) {
+      const state = refState(element.fieldName);
+      state.query = event.target.value;
+      state.open = true;
+    }
+
+    // Close the dropdown (option clicks use mousedown.prevent so blur fires only
+    // when focus truly leaves the field)
+    function closeRefSearch(element) {
+      refState(element.fieldName).open = false;
+    }
+
+    // Non-mutating reads for the template (state is created lazily by the event
+    // handlers above, never during render)
+    function refIsOpen(element) {
+      return !!refSearch[element.fieldName]?.open;
+    }
+
+    function refQuery(element) {
+      return refSearch[element.fieldName]?.query || '';
+    }
+
+    // --- Single Ref helpers ---
+
+    // Label shown in the input, derived from the currently selected id
+    function refSelectedLabel(element) {
+      const id = formData[element.fieldName];
+      if (id === '' || id === null || id === undefined) return '';
+      const opt = getSelectOptions(element).find(o => parseInt(o.id) === parseInt(id));
+      return opt ? opt.label : '';
+    }
+
+    // Typed query while open, selected label when closed
+    function refInputValue(element) {
+      const state = refSearch[element.fieldName];
+      return state?.open ? state.query : refSelectedLabel(element);
+    }
+
+    function isRefOptionSelected(element, opt) {
+      return parseInt(formData[element.fieldName]) === parseInt(opt.id);
+    }
+
+    function selectRefOption(element, opt) {
+      const state = refState(element.fieldName);
+      formData[element.fieldName] = opt.id;
+      state.query = '';
+      state.open = false;
+    }
+
+    function clearRefOption(element) {
+      const state = refState(element.fieldName);
+      formData[element.fieldName] = '';
+      state.query = '';
+      state.open = false;
+    }
+
+    // --- RefList (multiple) helpers ---
+
+    function isRefSelected(element, opt) {
+      const arr = formData[element.fieldName] || [];
+      return arr.some(v => parseInt(v) === parseInt(opt.id));
+    }
+
+    // Selected options as {id, label} for rendering chips
+    function selectedRefOptions(element) {
+      const arr = formData[element.fieldName] || [];
+      const opts = getSelectOptions(element);
+      return arr
+        .map(v => opts.find(o => parseInt(o.id) === parseInt(v)))
+        .filter(Boolean);
+    }
+
+    // Add or remove an option from the selection (dropdown stays open)
+    function toggleRefOption(element, opt) {
+      const col = element.fieldName;
+      if (!Array.isArray(formData[col])) formData[col] = [];
+      const arr = formData[col];
+      const idx = arr.findIndex(v => parseInt(v) === parseInt(opt.id));
+      if (idx === -1) {
+        arr.push(opt.id);
+      } else {
+        arr.splice(idx, 1);
+      }
+      refState(col).query = '';
+    }
+
+    function removeRefChip(element, opt) {
+      const arr = formData[element.fieldName] || [];
+      const idx = arr.findIndex(v => parseInt(v) === parseInt(opt.id));
+      if (idx !== -1) arr.splice(idx, 1);
+    }
+
+    // -------------------------------------------------------------------------
     // FORM VALIDATION
     // -------------------------------------------------------------------------
 
@@ -1262,6 +1383,20 @@ const app = createApp({
       getLabelHtml,
       hasSelectOptions,
       getSelectOptions,
+      refIsOpen,
+      refQuery,
+      filteredRefOptions,
+      openRefSearch,
+      onRefSearchInput,
+      closeRefSearch,
+      refInputValue,
+      isRefOptionSelected,
+      selectRefOption,
+      clearRefOption,
+      isRefSelected,
+      selectedRefOptions,
+      toggleRefOption,
+      removeRefChip,
       submitForm
     };
   }
