@@ -446,7 +446,7 @@ select[multiple] option:checked {
 
 .ref-option {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   padding: 8px 10px;
   border-radius: 3px;
@@ -482,8 +482,10 @@ select[multiple] option:checked {
 
 .ref-check {
   width: 14px;
+  flex-shrink: 0;
   display: inline-block;
   color: #2383e2;
+  line-height: 1.4;
 }
 
 /* -----------------------------------------------------------------------------
