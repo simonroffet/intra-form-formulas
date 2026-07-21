@@ -1070,6 +1070,29 @@ const app = createApp({
       const t = normalizeText(label);
       if (!q) return 0;
 
+      const tokens = q.split(/\s+/).filter(Boolean);
+      if (tokens.length > 1) {
+        let searchFrom = 0;
+        let start = null;
+        let end = null;
+        for (let ti = 0; ti < tokens.length; ti++) {
+          const token = tokens[ti];
+          if (ti > 0) {
+            while (searchFrom < t.length && t[searchFrom] === ' ') searchFrom++;
+          }
+          const idx = t.indexOf(token, ti === 0 ? 0 : searchFrom);
+          if (idx === -1) break;
+          if (ti > 0) {
+            const gap = t.slice(end + 1, idx);
+            if (gap.length > 0 && !/^\s+$/.test(gap)) { start = null; break; }
+          }
+          if (start === null) start = idx;
+          end = idx + token.length - 1;
+          searchFrom = end + 1;
+          if (ti === tokens.length - 1) return start;
+        }
+      }
+
       const idx = t.indexOf(q);
       if (idx !== -1) return idx;            // substring: prefix (idx 0) first
 
@@ -1122,9 +1145,48 @@ const app = createApp({
       return { normalized, normToOrig };
     }
 
-    // Build the option label as HTML with the contiguous substring matching the
-    // query highlighted. Only exact normalized substrings are highlighted — not
-    // scattered subsequence letters (which broke layout inside flex rows).
+    // Find the normalized character range to highlight. Multi-word queries match
+    // each token in order; only whitespace may appear between tokens, so spaces
+    // never split the highlight into separate spans.
+    function findHighlightRange(label, rawQuery) {
+      const tokens = normalizeText(rawQuery).split(/\s+/).filter(Boolean);
+      if (!tokens.length) return null;
+
+      const { normalized, normToOrig } = buildNormMap(label);
+
+      if (tokens.length === 1) {
+        const idx = normalized.indexOf(tokens[0]);
+        if (idx === -1) return null;
+        return { start: idx, end: idx + tokens[0].length - 1, normToOrig };
+      }
+
+      let searchFrom = 0;
+      let start = null;
+      let end = null;
+
+      for (let t = 0; t < tokens.length; t++) {
+        const token = tokens[t];
+        if (t > 0) {
+          while (searchFrom < normalized.length && normalized[searchFrom] === ' ') searchFrom++;
+        }
+        const idx = normalized.indexOf(token, t === 0 ? 0 : searchFrom);
+        if (idx === -1) return null;
+
+        if (t > 0) {
+          const gap = normalized.slice(end + 1, idx);
+          if (gap.length > 0 && !/^\s+$/.test(gap)) return null;
+        }
+
+        if (start === null) start = idx;
+        end = idx + token.length - 1;
+        searchFrom = end + 1;
+      }
+
+      return { start, end, normToOrig };
+    }
+
+    // Build the option label as HTML with the matching query highlighted as one
+    // contiguous block (including whitespace between matched words).
     function highlightRefLabel(element, opt) {
       const label = String(opt.label);
       const escapeHtml = str =>
@@ -1133,14 +1195,12 @@ const app = createApp({
       const raw = (refSearch[element.fieldName]?.query || '').trim();
       if (!raw || fuzzyScore(raw, label) === null) return escapeHtml(label);
 
-      const q = normalizeText(raw);
-      const { normalized, normToOrig } = buildNormMap(label);
-      const idx = normalized.indexOf(q);
-      if (idx === -1) return escapeHtml(label);
+      const range = findHighlightRange(label, raw);
+      if (!range) return escapeHtml(label);
 
       const highlightOrig = new Set();
-      for (let k = idx; k < idx + q.length; k++) {
-        highlightOrig.add(normToOrig[k]);
+      for (let k = range.start; k <= range.end; k++) {
+        highlightOrig.add(range.normToOrig[k]);
       }
 
       let html = '';
