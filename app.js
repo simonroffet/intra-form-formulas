@@ -1092,15 +1092,16 @@ const app = createApp({
       return best <= maxErrors ? 1000 + best : null;
     }
 
-    // Options of a Ref/RefList field: all options stay available, only reordered
-    // by resemblance to the current query (best match first, non-matches last).
-    // Array.sort is stable, so ties and non-matches keep their original order.
+    // Options of a Ref/RefList field: reordered by resemblance to the query (best
+    // match first). When some options match, non-matches stay at the bottom.
+    // When none match, return an empty list so the template shows "Aucun résultat".
     function filteredRefOptions(element) {
       const opts = getSelectOptions(element);
       const q = (refSearch[element.fieldName]?.query || '').trim();
       if (!q) return opts;
-      return opts
-        .map(opt => ({ opt, score: fuzzyScore(q, opt.label) }))
+      const scored = opts.map(opt => ({ opt, score: fuzzyScore(q, opt.label) }));
+      if (!scored.some(entry => entry.score !== null)) return [];
+      return scored
         .sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity))
         .map(entry => entry.opt);
     }
@@ -1152,9 +1153,12 @@ const app = createApp({
     }
 
     // Close the dropdown (option clicks use mousedown.prevent so blur fires only
-    // when focus truly leaves the field)
+    // when focus truly leaves the field). Clear the query so RefList inputs do
+    // not keep stale search text after blur or form reset.
     function closeRefSearch(element) {
-      refState(element.fieldName).open = false;
+      const state = refState(element.fieldName);
+      state.open = false;
+      state.query = '';
     }
 
     // Non-mutating reads for the template (state is created lazily by the event
