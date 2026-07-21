@@ -464,6 +464,13 @@ select[multiple] option:checked {
   color: #2383e2;
 }
 
+.ref-option-label {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .ref-match {
   color: #2383e2;
   font-weight: 600;
