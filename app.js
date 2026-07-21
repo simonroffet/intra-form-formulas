@@ -1105,10 +1105,26 @@ const app = createApp({
         .map(entry => entry.opt);
     }
 
-    // Build the option label as HTML with the characters matching the query
-    // highlighted (greedy left-to-right subsequence). Only options that actually
-    // fuzzy-match get highlights. Every character is HTML-escaped, and only
-    // trusted <span> tags are injected, so the label stays XSS-safe.
+    // Map each normalized character back to its starting index in the original label
+    function buildNormMap(label) {
+      let normalized = '';
+      const normToOrig = [];
+      for (let i = 0; i < label.length; ) {
+        const cp = label.codePointAt(i);
+        const ch = String.fromCodePoint(cp);
+        const n = normalizeText(ch);
+        for (let j = 0; j < n.length; j++) {
+          normalized += n[j];
+          normToOrig.push(i);
+        }
+        i += ch.length;
+      }
+      return { normalized, normToOrig };
+    }
+
+    // Build the option label as HTML with the contiguous substring matching the
+    // query highlighted. Only exact normalized substrings are highlighted — not
+    // scattered subsequence letters (which broke layout inside flex rows).
     function highlightRefLabel(element, opt) {
       const label = String(opt.label);
       const escapeHtml = str =>
@@ -1118,20 +1134,30 @@ const app = createApp({
       if (!raw || fuzzyScore(raw, label) === null) return escapeHtml(label);
 
       const q = normalizeText(raw);
+      const { normalized, normToOrig } = buildNormMap(label);
+      const idx = normalized.indexOf(q);
+      if (idx === -1) return escapeHtml(label);
+
+      const highlightOrig = new Set();
+      for (let k = idx; k < idx + q.length; k++) {
+        highlightOrig.add(normToOrig[k]);
+      }
+
       let html = '';
-      let qi = 0;
       let open = false;
-      for (const ch of label) {
-        const matched = qi < q.length && normalizeText(ch) === q[qi];
-        if (matched) qi++;
-        if (matched && !open) {
+      for (let i = 0; i < label.length; ) {
+        const cp = label.codePointAt(i);
+        const ch = String.fromCodePoint(cp);
+        const inHighlight = highlightOrig.has(i);
+        if (inHighlight && !open) {
           html += '<span class="ref-match">';
           open = true;
-        } else if (!matched && open) {
+        } else if (!inHighlight && open) {
           html += '</span>';
           open = false;
         }
         html += escapeHtml(ch);
+        i += ch.length;
       }
       if (open) html += '</span>';
       return html;
