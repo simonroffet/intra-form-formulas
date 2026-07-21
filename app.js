@@ -1096,6 +1096,12 @@ const app = createApp({
       const idx = t.indexOf(q);
       if (idx !== -1) return idx;            // substring: prefix (idx 0) first
 
+      const collapsedQ = q.replace(/\s+/g, '');
+      if (collapsedQ) {
+        const collapsed = findCollapsedRange(t, collapsedQ);
+        if (collapsed) return collapsed.start;
+      }
+
       // Allow roughly one typo every three characters (at least one)
       const maxErrors = Math.max(1, Math.floor(q.length / 3));
       let best = Infinity;
@@ -1145,9 +1151,34 @@ const app = createApp({
       return { normalized, normToOrig };
     }
 
+    // Build a space-stripped copy of the normalized label, with a map back to
+    // normalized indices (used when the query omits spaces between words).
+    function buildCollapsedMap(normalized) {
+      let collapsed = '';
+      const collapsedToNorm = [];
+      for (let i = 0; i < normalized.length; i++) {
+        if (normalized[i] === ' ') continue;
+        collapsed += normalized[i];
+        collapsedToNorm.push(i);
+      }
+      return { collapsed, collapsedToNorm };
+    }
+
+    function findCollapsedRange(normalized, collapsedQuery) {
+      if (!collapsedQuery) return null;
+      const { collapsed, collapsedToNorm } = buildCollapsedMap(normalized);
+      const idx = collapsed.indexOf(collapsedQuery);
+      if (idx === -1) return null;
+      return {
+        start: collapsedToNorm[idx],
+        end: collapsedToNorm[idx + collapsedQuery.length - 1]
+      };
+    }
+
     // Find the normalized character range to highlight. Multi-word queries match
     // each token in order; only whitespace may appear between tokens, so spaces
-    // never split the highlight into separate spans.
+    // never split the highlight into separate spans. Queries without spaces also
+    // match across whitespace in the label (e.g. "lesavan" → "Les avan").
     function findHighlightRange(label, rawQuery) {
       const tokens = normalizeText(rawQuery).split(/\s+/).filter(Boolean);
       if (!tokens.length) return null;
@@ -1155,9 +1186,14 @@ const app = createApp({
       const { normalized, normToOrig } = buildNormMap(label);
 
       if (tokens.length === 1) {
-        const idx = normalized.indexOf(tokens[0]);
-        if (idx === -1) return null;
-        return { start: idx, end: idx + tokens[0].length - 1, normToOrig };
+        const token = tokens[0];
+        const idx = normalized.indexOf(token);
+        if (idx !== -1) {
+          return { start: idx, end: idx + token.length - 1, normToOrig };
+        }
+        const collapsed = findCollapsedRange(normalized, token);
+        if (collapsed) return { ...collapsed, normToOrig };
+        return null;
       }
 
       let searchFrom = 0;

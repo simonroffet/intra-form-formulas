@@ -24,6 +24,28 @@ function buildNormMap(label) {
   return { normalized, normToOrig };
 }
 
+function buildCollapsedMap(normalized) {
+  let collapsed = '';
+  const collapsedToNorm = [];
+  for (let i = 0; i < normalized.length; i++) {
+    if (normalized[i] === ' ') continue;
+    collapsed += normalized[i];
+    collapsedToNorm.push(i);
+  }
+  return { collapsed, collapsedToNorm };
+}
+
+function findCollapsedRange(normalized, collapsedQuery) {
+  if (!collapsedQuery) return null;
+  const { collapsed, collapsedToNorm } = buildCollapsedMap(normalized);
+  const idx = collapsed.indexOf(collapsedQuery);
+  if (idx === -1) return null;
+  return {
+    start: collapsedToNorm[idx],
+    end: collapsedToNorm[idx + collapsedQuery.length - 1]
+  };
+}
+
 function findHighlightRange(label, rawQuery) {
   const tokens = normalizeText(rawQuery).split(/\s+/).filter(Boolean);
   if (!tokens.length) return null;
@@ -31,9 +53,14 @@ function findHighlightRange(label, rawQuery) {
   const { normalized, normToOrig } = buildNormMap(label);
 
   if (tokens.length === 1) {
-    const idx = normalized.indexOf(tokens[0]);
-    if (idx === -1) return null;
-    return { start: idx, end: idx + tokens[0].length - 1, normToOrig };
+    const token = tokens[0];
+    const idx = normalized.indexOf(token);
+    if (idx !== -1) {
+      return { start: idx, end: idx + token.length - 1, normToOrig };
+    }
+    const collapsed = findCollapsedRange(normalized, token);
+    if (collapsed) return { ...collapsed, normToOrig };
+    return null;
   }
 
   let searchFrom = 0;
@@ -118,8 +145,20 @@ describe('Ref search — highlightRefLabel', () => {
     expect(html.match(/ref-match/g)).toHaveLength(1);
   });
 
+  it('highlights when spaces are omitted from the query', () => {
+    expect(highlightRefLabel('Les avants de Toulouse', 'lesavan')).toBe(
+      '<span class="ref-match">Les avan</span>ts de Toulouse'
+    );
+  });
+
   it('does not scatter highlights when tokens are not adjacent in the label', () => {
     const html = highlightRefLabel(longLabel, 'les avan');
+    expect(html).not.toContain('<span class="ref-match">');
+    expect(html).toBe(longLabel);
+  });
+
+  it('does not highlight collapsed matches separated by other characters', () => {
+    const html = highlightRefLabel(longLabel, 'lesavan');
     expect(html).not.toContain('<span class="ref-match">');
     expect(html).toBe(longLabel);
   });
