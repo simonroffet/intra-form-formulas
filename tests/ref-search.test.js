@@ -24,6 +24,43 @@ function buildNormMap(label) {
   return { normalized, normToOrig };
 }
 
+function findHighlightRange(label, rawQuery) {
+  const tokens = normalizeText(rawQuery).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return null;
+
+  const { normalized, normToOrig } = buildNormMap(label);
+
+  if (tokens.length === 1) {
+    const idx = normalized.indexOf(tokens[0]);
+    if (idx === -1) return null;
+    return { start: idx, end: idx + tokens[0].length - 1, normToOrig };
+  }
+
+  let searchFrom = 0;
+  let start = null;
+  let end = null;
+
+  for (let t = 0; t < tokens.length; t++) {
+    const token = tokens[t];
+    if (t > 0) {
+      while (searchFrom < normalized.length && normalized[searchFrom] === ' ') searchFrom++;
+    }
+    const idx = normalized.indexOf(token, t === 0 ? 0 : searchFrom);
+    if (idx === -1) return null;
+
+    if (t > 0) {
+      const gap = normalized.slice(end + 1, idx);
+      if (gap.length > 0 && !/^\s+$/.test(gap)) return null;
+    }
+
+    if (start === null) start = idx;
+    end = idx + token.length - 1;
+    searchFrom = end + 1;
+  }
+
+  return { start, end, normToOrig };
+}
+
 function highlightRefLabel(label, query) {
   const escapeHtml = str =>
     str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -31,14 +68,12 @@ function highlightRefLabel(label, query) {
   const raw = (query || '').trim();
   if (!raw) return escapeHtml(label);
 
-  const q = normalizeText(raw);
-  const { normalized, normToOrig } = buildNormMap(label);
-  const idx = normalized.indexOf(q);
-  if (idx === -1) return escapeHtml(label);
+  const range = findHighlightRange(label, raw);
+  if (!range) return escapeHtml(label);
 
   const highlightOrig = new Set();
-  for (let k = idx; k < idx + q.length; k++) {
-    highlightOrig.add(normToOrig[k]);
+  for (let k = range.start; k <= range.end; k++) {
+    highlightOrig.add(range.normToOrig[k]);
   }
 
   let html = '';
@@ -71,7 +106,19 @@ describe('Ref search — highlightRefLabel', () => {
     );
   });
 
-  it('does not scatter highlights across the label for partial multi-word queries', () => {
+  it('highlights multi-word queries as one block including the space', () => {
+    expect(highlightRefLabel('Les avants de Toulouse', 'les avan')).toBe(
+      '<span class="ref-match">Les avan</span>ts de Toulouse'
+    );
+  });
+
+  it('keeps one highlight span when the label has extra whitespace', () => {
+    const html = highlightRefLabel('Les  avants', 'les avan');
+    expect(html).toBe('<span class="ref-match">Les  avan</span>ts');
+    expect(html.match(/ref-match/g)).toHaveLength(1);
+  });
+
+  it('does not scatter highlights when tokens are not adjacent in the label', () => {
     const html = highlightRefLabel(longLabel, 'les avan');
     expect(html).not.toContain('<span class="ref-match">');
     expect(html).toBe(longLabel);
